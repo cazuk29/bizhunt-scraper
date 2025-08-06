@@ -1,77 +1,58 @@
 from flask import Flask, render_template, request, send_file
+from scraper import scrape_google_search
 import pandas as pd
-from scraper import scrape_google_maps, scrape_yelp
+import uuid
 import os
-from datetime import datetime
 
 app = Flask(__name__)
+EXPORT_FOLDER = "exports"
+os.makedirs(EXPORT_FOLDER, exist_ok=True)
 
-uk_counties = [
-    "Bedfordshire", "Berkshire", "Bristol", "Buckinghamshire", "Cambridgeshire", "Cheshire", "City of London",
-    "Cornwall", "County Durham", "Cumbria", "Derbyshire", "Devon", "Dorset", "East Riding of Yorkshire",
-    "East Sussex", "Essex", "Gloucestershire", "Greater London", "Greater Manchester", "Hampshire", "Herefordshire",
-    "Hertfordshire", "Isle of Wight", "Kent", "Lancashire", "Leicestershire", "Lincolnshire", "Merseyside",
-    "Norfolk", "North Yorkshire", "Northamptonshire", "Northumberland", "Nottinghamshire", "Oxfordshire",
-    "Rutland", "Shropshire", "Somerset", "South Yorkshire", "Staffordshire", "Suffolk", "Surrey", "Tyne and Wear",
-    "Warwickshire", "West Midlands", "West Sussex", "West Yorkshire", "Wiltshire", "Worcestershire"
-]
 
-@app.route('/', methods=['GET', 'POST'])
+@app.route("/", methods=["GET", "POST"])
 def index():
-    error = None
     results = []
+    exported_file = None
+    error = None
 
-    if request.method == 'POST':
-        print("✅ FORM DATA RECEIVED:", request.form)  # NEW: Debug logging
+    if request.method == "POST":
+        keyword = request.form.get("keyword")
+        county = request.form.get("county")
+        file_format = request.form.get("file_format")
 
-        keywords = request.form.get('keyword', '').split(',')
-        county = request.form.get('county', '')
-        export_format = request.form.get('export_format', 'csv')
-
-        if not keywords or not county:
+        if not keyword or not county:
             error = "Please enter both keyword and county."
-            return render_template("index.html", counties=uk_counties, error=error)
+        else:
+            try:
+                results = scrape_google_search(keyword, county)
 
-        all_results = []
+                if not results:
+                    error = "No UK results found. Try another keyword or county."
+                else:
+                    df = pd.DataFrame(results)
+                    filename = f"{uuid.uuid4().hex}_results.{ 'xlsx' if file_format == 'xlsx' else 'csv' }"
+                    filepath = os.path.join(EXPORT_FOLDER, filename)
 
-        try:
-            for keyword in keywords:
-                keyword = keyword.strip()
-                print(f"🔎 Searching: {keyword} in {county}")
-                google_data = scrape_google_maps(keyword, county)
-                yelp_data = scrape_yelp(keyword, county)
+                    if file_format == "xlsx":
+                        df.to_excel(filepath, index=False)
+                    else:
+                        df.to_csv(filepath, index=False)
 
-                combined = google_data + yelp_data
-                print(f"✅ Results for '{keyword}': {len(combined)}")
+                    exported_file = filepath
 
-                if not combined:
-                    print("🔁 Retrying...")
-                    google_data = scrape_google_maps(keyword, county)
-                    yelp_data = scrape_yelp(keyword, county)
-                    combined = google_data + yelp_data
+            except Exception as e:
+                error = f"An error occurred: {e}"
 
-                all_results += combined
+    return render_template("index.html", results=results, exported_file=exported_file, error=error)
 
-            if not all_results:
-                error = "No data found. Try different keywords or counties."
-                return render_template("index.html", counties=uk_counties, error=error)
 
-            df = pd.DataFrame(all_results)
-            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-            filename = f"results_{timestamp}"
+@app.route("/download")
+def download_file():
+    filepath = request.args.get("file")
+    if filepath and os.path.exists(filepath):
+        return send_file(filepath, as_attachment=True)
+    return "File not found", 404
 
-            if export_format == 'csv':
-                filepath = f"{filename}.csv"
-                df.to_csv(filepath, index=False)
-            else:
-                filepath = f"{filename}.xlsx"
-                df.to_excel(filepath, index=False)
 
-            return send_file(filepath, as_attachment=True)
-
-        except Exception as e:
-            print(f"❌ Error: {e}")
-            error = f"An error occurred: {str(e)}"
-            return render_template("index.html", counties=uk_counties, error=error)
-
-    return render_template("index.html", counties=uk_counties)
+if __name__ == "__main__":
+    app.run(debug=True)
