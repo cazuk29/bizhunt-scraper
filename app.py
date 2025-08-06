@@ -22,27 +22,39 @@ def index():
     results = []
 
     if request.method == 'POST':
-        keyword = request.form['keyword']
+        keywords = request.form['keyword'].split(',')
         county = request.form['county']
         export_format = request.form['export_format']
 
-        print(f"🔎 Starting search: {keyword} in {county}")
+        all_results = []
 
         try:
-            google_data = scrape_google_maps(keyword, county)
-            yelp_data = scrape_yelp(keyword, county)
+            for keyword in keywords:
+                keyword = keyword.strip()
+                print(f"🔎 Searching: {keyword} in {county}")
+                google_data = scrape_google_maps(keyword, county)
+                yelp_data = scrape_yelp(keyword, county)
 
-            all_results = google_data + yelp_data
-            print(f"✅ Total results found: {len(all_results)}")
+                combined = google_data + yelp_data
+                print(f"✅ Results for '{keyword}': {len(combined)}")
+
+                # Retry once if no data
+                if not combined:
+                    print("🔁 Retrying...")
+                    google_data = scrape_google_maps(keyword, county)
+                    yelp_data = scrape_yelp(keyword, county)
+                    combined = google_data + yelp_data
+
+                all_results += combined
 
             if not all_results:
-                error = "No data found. Try a different keyword or county."
+                error = "No data found. Try different keywords or counties."
                 return render_template("index.html", counties=uk_counties, error=error)
 
-            # Export logic
+            # Export
             df = pd.DataFrame(all_results)
             timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-            filename = f"{keyword}_{county}_results_{timestamp}"
+            filename = f"results_{timestamp}"
 
             if export_format == 'csv':
                 filepath = f"{filename}.csv"
@@ -54,11 +66,8 @@ def index():
             return send_file(filepath, as_attachment=True)
 
         except Exception as e:
-            print(f"❌ Error occurred: {e}")
-            error = f"An error occurred during scraping: {str(e)}"
+            print(f"❌ Error: {e}")
+            error = f"An error occurred: {str(e)}"
             return render_template("index.html", counties=uk_counties, error=error)
 
     return render_template("index.html", counties=uk_counties)
-
-if __name__ == '__main__':
-    app.run(debug=True)
