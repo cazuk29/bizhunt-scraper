@@ -22,9 +22,15 @@ def index():
     results = []
 
     if request.method == 'POST':
-        keywords = request.form['keyword'].split(',')
-        county = request.form['county']
-        export_format = request.form['export_format']
+        print("✅ FORM DATA RECEIVED:", request.form)  # NEW: Debug logging
+
+        keywords = request.form.get('keyword', '').split(',')
+        county = request.form.get('county', '')
+        export_format = request.form.get('export_format', 'csv')
+
+        if not keywords or not county:
+            error = "Please enter both keyword and county."
+            return render_template("index.html", counties=uk_counties, error=error)
 
         all_results = []
 
@@ -38,7 +44,6 @@ def index():
                 combined = google_data + yelp_data
                 print(f"✅ Results for '{keyword}': {len(combined)}")
 
-                # Retry once if no data
                 if not combined:
                     print("🔁 Retrying...")
                     google_data = scrape_google_maps(keyword, county)
@@ -51,7 +56,6 @@ def index():
                 error = "No data found. Try different keywords or counties."
                 return render_template("index.html", counties=uk_counties, error=error)
 
-            # Export
             df = pd.DataFrame(all_results)
             timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
             filename = f"results_{timestamp}"
