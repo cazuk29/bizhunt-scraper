@@ -27,9 +27,9 @@ def scrape_google_maps(keyword, location):
         "q": keyword,
         "location": location,
         "type": "search",
-        "hl": "en",
-        "gl": "gb",
-        "google_domain": "google.co.uk",
+        "hl": "en",                   # Force English
+        "gl": "gb",                   # Force UK country code
+        "google_domain": "google.co.uk",  # UK-specific domain
         "api_key": SERP_API_KEY
     }
 
@@ -37,6 +37,7 @@ def scrape_google_maps(keyword, location):
     data = response.json()
 
     results = []
+
     for result in data.get("local_results", []):
         title = result.get("title")
         phone = result.get("phone", "N/A")
@@ -63,7 +64,9 @@ def scrape_google_maps(keyword, location):
             "Email": email,
             "Website": website if website else "N/A"
         })
+
     return results
+
 
 def scrape_yelp(keyword, location):
     headers = {"User-Agent": "Mozilla/5.0"}
