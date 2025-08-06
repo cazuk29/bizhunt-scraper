@@ -1,23 +1,30 @@
 import requests
 import re
+import os
 from bs4 import BeautifulSoup
 
-SERP_API_KEY = "c6c98f0d23a0600601f8c7e761e24c2acc3a99fc26488b26cb0c81de3774270b"  # Replace this with your real key
+SERP_API_KEY = os.getenv("SERP_API_KEY")
 
 def is_uk_address(address):
     if not address:
         return False
+
     address = address.lower()
 
+    # Disqualify common non-UK countries
     non_uk_terms = ["united states", "usa", "france", "germany", "canada", "australia"]
-    if any(term in address for term in non_uk_terms):
-        return False
+    for term in non_uk_terms:
+        if term in address:
+            return False
 
+    # Confirm if UK-related keywords or postcode present
     if "united kingdom" in address or " uk" in address or ",uk" in address:
         return True
 
+    # UK postcode regex
     postcode_pattern = r"\b([A-Z]{1,2}[0-9R][0-9A-Z]?)\s?[0-9][ABD-HJLNP-UW-Z]{2}\b"
     return re.search(postcode_pattern, address.upper()) is not None
+
 
 def scrape_google_maps(keyword, location):
     location = f"{location}, United Kingdom"
@@ -27,14 +34,15 @@ def scrape_google_maps(keyword, location):
         "q": keyword,
         "location": location,
         "type": "search",
-        "hl": "en",                   # Force English
-        "gl": "gb",                   # Force UK country code
-        "google_domain": "google.co.uk",  # UK-specific domain
+        "hl": "en",
+        "gl": "gb",
+        "google_domain": "google.co.uk",
         "api_key": SERP_API_KEY
     }
 
     response = requests.get(url, params=params)
     data = response.json()
+    print("📦 SerpAPI raw data:", data)  # For debugging
 
     results = []
 
@@ -47,6 +55,7 @@ def scrape_google_maps(keyword, location):
         if not is_uk_address(address):
             continue
 
+        # Attempt email scrape
         email = "N/A"
         if website:
             try:
@@ -77,18 +86,16 @@ def scrape_yelp(keyword, location):
     soup = BeautifulSoup(response.text, "html.parser")
     results = []
 
-    listings = soup.find_all("div", class_="container__09f24__mpR8_")
+    listings = soup.select("li[class*=border-color--default__]")
 
     for listing in listings:
-        name_tag = listing.find("a", class_="css-19v1rkv")
-        if not name_tag:
-            continue
+        name_tag = listing.find("a", href=True)
+        address_tag = listing.find("span", class_="css-e81eai")
 
-        name = name_tag.text.strip()
-        address_tag = listing.find("span", class_="raw__09f24__T4Ezm")
+        name = name_tag.text.strip() if name_tag else None
         address = address_tag.text.strip() if address_tag else "N/A"
 
-        if not is_uk_address(address):
+        if not name or not is_uk_address(address):
             continue
 
         results.append({
