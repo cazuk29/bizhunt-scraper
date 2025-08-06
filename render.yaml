@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: bizhunt-scraper
+    env: python
+    buildCommand: ""
+    startCommand: gunicorn app:app
+    envVars:
+      - key: SERP_API_KEY
+        value: c6c98f0d23a0600601f8c7e761e24c2acc3a99fc26488b26cb0c81de3774270b
