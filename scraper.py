@@ -13,7 +13,6 @@ def extract_email(text):
 
 
 def get_serpapi_location(county):
-    """Gets a matching UK location string from SerpAPI's /locations.json."""
     try:
         response = requests.get(
             "https://serpapi.com/locations.json",
@@ -25,7 +24,14 @@ def get_serpapi_location(county):
             return locations[0]['canonical_name']
     except Exception as e:
         print(f"❌ Error fetching location: {e}")
-    return f"{county}, United Kingdom"  # fallback
+    return f"{county}, United Kingdom"
+
+
+def is_uk_address(address):
+    if not address:
+        return False
+    address = address.lower()
+    return any(kw in address for kw in ['united kingdom', 'england', 'scotland', 'wales', 'northern ireland', 'uk'])
 
 
 def scrape_google_maps(keyword, county):
@@ -51,9 +57,13 @@ def scrape_google_maps(keyword, county):
     local_results = data.get("local_results", [])
 
     for biz in local_results:
+        address = biz.get("address")
+        if not is_uk_address(address):
+            continue  # skip non-UK listings
+
         result = {
             "name": biz.get("title"),
-            "address": biz.get("address"),
+            "address": address,
             "phone": biz.get("phone"),
             "website": biz.get("website"),
             "email": extract_email(biz.get("website")),
@@ -61,7 +71,7 @@ def scrape_google_maps(keyword, county):
         }
         results.append(result)
 
-    print(f"✅ Returning {len(results)} Google results")
+    print(f"✅ Returning {len(results)} UK Google results")
     return results
 
 
@@ -82,9 +92,13 @@ def scrape_yelp(keyword, county):
 
     results = []
     for biz in data.get("businesses", []):
+        address = biz.get("address")
+        if not is_uk_address(address):
+            continue
+
         result = {
             "name": biz.get("name"),
-            "address": biz.get("address"),
+            "address": address,
             "phone": biz.get("phone"),
             "website": biz.get("website"),
             "email": extract_email(biz.get("website")),
@@ -92,5 +106,5 @@ def scrape_yelp(keyword, county):
         }
         results.append(result)
 
-    print(f"✅ Returning {len(results)} Yelp results")
+    print(f"✅ Returning {len(results)} UK Yelp results")
     return results
