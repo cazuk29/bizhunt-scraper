@@ -4,18 +4,38 @@ import os
 
 SERP_API_KEY = os.getenv("SERP_API_KEY", "c6c98f0d23a0600601f8c7e761e24c2acc3a99fc26488b26cb0c81de3774270b")
 
+
 def extract_email(text):
     if not text:
         return None
     match = re.search(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", text)
     return match.group(0) if match else None
 
-def scrape_google_maps(keyword, location):
+
+def get_serpapi_location(county):
+    """Gets a matching UK location string from SerpAPI's /locations.json."""
+    try:
+        response = requests.get(
+            "https://serpapi.com/locations.json",
+            params={"q": f"{county}, United Kingdom"}
+        )
+        locations = response.json()
+        if locations:
+            print(f"📍 Matched location: {locations[0]['canonical_name']}")
+            return locations[0]['canonical_name']
+    except Exception as e:
+        print(f"❌ Error fetching location: {e}")
+    return f"{county}, United Kingdom"  # fallback
+
+
+def scrape_google_maps(keyword, county):
+    location = get_serpapi_location(county)
     print(f"🔍 Google Maps Search: {keyword} in {location}")
+
     params = {
         "engine": "google_maps",
         "q": keyword,
-        "location": f"{location}, United Kingdom",
+        "location": location,
         "type": "search",
         "hl": "en",
         "gl": "gb",
@@ -45,12 +65,14 @@ def scrape_google_maps(keyword, location):
     return results
 
 
-def scrape_yelp(keyword, location):
+def scrape_yelp(keyword, county):
+    location = get_serpapi_location(county)
     print(f"🔍 Yelp Search: {keyword} in {location}")
+
     params = {
         "engine": "yelp",
         "q": keyword,
-        "location": f"{location}, United Kingdom",
+        "location": location,
         "api_key": SERP_API_KEY
     }
 
